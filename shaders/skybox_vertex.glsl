@@ -10,5 +10,5 @@ void main()
 {
     TexCoords = aPos;
     vec4 pos = projection * view * vec4(aPos, 1.0);
-    gl_Position = pos.xyww; // z = w olduğu için depth buffer'da her zaman en uzakta
+    gl_Position = pos.xyww; // z = w so it's always farthest in depth buffer
 }

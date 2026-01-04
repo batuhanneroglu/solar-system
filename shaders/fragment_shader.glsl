@@ -27,22 +27,22 @@ void main()
     }
     
     if (isSun) {
-        // Güneş kendi kendine parlar - yüksek parlaklık
-        vec3 sunColor = baseColor * 2.5; // Daha parlak güneş
+        // sun is self-illuminating with high brightness
+        vec3 sunColor = baseColor * 2.5; // brighter sun
         FragColor = vec4(sunColor, 1.0);
-        BrightColor = vec4(sunColor, 1.0); // Bloom için
+        BrightColor = vec4(sunColor, 1.0); // for bloom effect
     } else {
-        // Ambient (ortam ışığı)
+        // ambient lighting
         float ambientStrength = 0.05;
         vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
         
-        // Diffuse (yayılı ışık)
+        // diffuse lighting
         vec3 norm = normalize(Normal);
         vec3 lightDir = normalize(lightPos - FragPos);
         float diff = max(dot(norm, lightDir), 0.0);
         vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
         
-        // Specular (parlak yansıma)
+        // specular reflection
         float specularStrength = 0.1;
         vec3 viewDir = normalize(viewPos - FragPos);
         vec3 reflectDir = reflect(-lightDir, norm);
@@ -51,26 +51,27 @@ void main()
         
         vec3 result = (ambient + diffuse + specular) * baseColor;
         
-        // Dünya için gece ışıkları (şehir ışıkları)
+        // night lights for earth (city lights)
         if (hasNightTexture) {
             vec3 nightColor = texture(nightTexture, TexCoord).rgb;
-            // Gece tarafında şehir ışıkları görünsün
+            // show city lights on night side
             float nightStrength = 1.0 - smoothstep(-0.1, 0.2, diff);
             result += nightColor * nightStrength * 0.8;
         }
         
-        // Seçili gezegen parlasın (glow)
+        // rim lighting for selected planet (edge glow)
         if (isSelected) {
-            result += vec3(0.3, 0.3, 0.5) * glowIntensity;
+            vec3 viewDir = normalize(viewPos - FragPos);
+            vec3 norm = normalize(Normal);
+            float rimAmount = 1.0 - max(dot(viewDir, norm), 0.0);
+            rimAmount = pow(rimAmount, 3.0); // make edges sharper
+            vec3 rimColor = vec3(0.4, 0.6, 1.0) * rimAmount * glowIntensity * 2.0;
+            result += rimColor;
         }
         
         FragColor = vec4(result, 1.0);
         
-        // Parlak alanları bloom için çıkar - sadece güneş ve seçili gezegenler
-        if (isSelected) {
-            BrightColor = vec4(result * 0.5, 1.0);
-        } else {
-            BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
-        }
+        // extract bright areas for bloom - sun only
+        BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
     }
 }

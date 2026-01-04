@@ -13,20 +13,26 @@ public:
     float radius;
     float displayRadius;
     glm::vec3 position;
-    glm::vec3 velocity;      // velocity.z = yörünge hızı (basit mod)
+    glm::vec3 velocity;      // velocity.z = orbit speed (simple mode)
     glm::vec3 color;
     float rotationSpeed;
     float rotationAngle;
     bool isSun;
     
-    // Basit yörünge için
-    float orbitRadius;       // Başlangıç mesafesi
-    float orbitSpeed;        // Yörünge hızı
-    float orbitAngle;        // Mevcut açı
+    // for simple orbit
+    float orbitRadius;       // initial distance
+    float orbitSpeed;        // orbit speed
+    float orbitAngle;        // current angle
     
     // Texture
     unsigned int textureID;
     bool hasTexture;
+    
+    // Ring properties
+    bool hasRing;
+    float ringInnerRadius;
+    float ringOuterRadius;
+    unsigned int ringTextureID;
 
     CelestialBody(const std::string& name, float mass, float radius, float displayRadius,
                   const glm::vec3& position, const glm::vec3& velocity, 
@@ -35,24 +41,25 @@ public:
           position(position), velocity(velocity), color(color), 
           rotationSpeed(rotationSpeed), rotationAngle(0.0f), isSun(isSun),
           orbitRadius(glm::length(position)), orbitSpeed(velocity.z), orbitAngle(0.0f),
-          textureID(0), hasTexture(false) {}
+          textureID(0), hasTexture(false), hasRing(false), ringInnerRadius(0.0f), 
+          ringOuterRadius(0.0f), ringTextureID(0) {}
 
     void update(float deltaTime, const std::vector<CelestialBody*>& bodies) {
         if (isSun) {
-            // Güneş sadece döner
+            // sun only rotates
             rotationAngle += rotationSpeed * deltaTime;
             return;
         }
 
-        // Basit dairesel yörünge hareketi (görsel mod)
+        // simple circular orbit movement (visual mode)
         orbitAngle += orbitSpeed * deltaTime;
         
-        // Yeni pozisyon hesapla (XZ düzleminde dairesel)
+        // calculate new position (circular in xz plane)
         position.x = orbitRadius * cos(orbitAngle);
         position.z = orbitRadius * sin(orbitAngle);
         position.y = 0.0f;
         
-        // Kendi ekseni etrafında dönme
+        // rotation around own axis
         rotationAngle += rotationSpeed * deltaTime;
     }
 };

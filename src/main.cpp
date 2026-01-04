@@ -10,6 +10,7 @@
 #include <cmath>
 #include "Camera.h"
 #include "Sphere.h"
+#include "Ring.h"
 #include "CelestialBody.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -21,30 +22,31 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Ayarlar
+// settings
 const unsigned int SCR_WIDTH = 1920;
 const unsigned int SCR_HEIGHT = 1080;
 
-// Kamera
+// camera
 Camera camera(glm::vec3(0.0f, 150.0f, 400.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
-// Zamanlama
+// timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// Zaman hızlandırma (görsel mod - hızlı animasyon)
+// time scaling for visual animation
 float timeScale = 0.5f;
 
-// UI ve gezegen takibi
+// ui and planet tracking
 bool showMenu = false;
 int selectedPlanetIndex = -1;
 bool followMode = false;
+bool showOrbits = true;
 glm::vec3 followOffset(0.0f, 20.0f, 50.0f);
 float glowPulse = 0.0f;
-std::vector<CelestialBody*> celestialBodies;  // Global erişim için
+std::vector<CelestialBody*> celestialBodies;  // for global access
 
 // Mouse callback
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -56,7 +58,7 @@ std::string loadShaderSource(const char* filePath);
 GLuint compileShader(GLenum type, const char* source);
 GLuint createShaderProgram(const char* vertexPath, const char* fragmentPath);
 
-// Texture yükleme fonksiyonu
+// texture loading function
 GLuint loadTexture(const char* path) {
     GLuint textureID;
     glGenTextures(1, &textureID);
@@ -84,9 +86,9 @@ GLuint loadTexture(const char* path) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         
         stbi_image_free(data);
-        std::cout << "Texture yüklendi: " << path << " (" << width << "x" << height << ")" << std::endl;
+        std::cout << "Texture loaded: " << path << " (" << width << "x" << height << ")" << std::endl;
     } else {
-        std::cout << "Texture yüklenemedi: " << path << std::endl;
+        std::cout << "Texture failed to load: " << path << std::endl;
         stbi_image_free(data);
         return 0;
     }
@@ -94,9 +96,9 @@ GLuint loadTexture(const char* path) {
     return textureID;
 }
 
-// Yörünge çizgisi oluşturma fonksiyonu
+// orbit line creation function
 void createOrbitLine(float radius, GLuint& VAO, GLuint& VBO, int& vertexCount) {
-    const int segments = 200; // Daha düzgün çember için
+    const int segments = 200; // for smoother circle
     vertexCount = segments + 1;
     std::vector<float> vertices;
     
@@ -105,7 +107,7 @@ void createOrbitLine(float radius, GLuint& VAO, GLuint& VBO, int& vertexCount) {
         float x = radius * cos(angle);
         float z = radius * sin(angle);
         vertices.push_back(x);
-        vertices.push_back(0.0f); // Y = 0 (yatay düzlem)
+        vertices.push_back(0.0f); // y = 0 (horizontal plane)
         vertices.push_back(z);
     }
     
@@ -123,9 +125,9 @@ void createOrbitLine(float radius, GLuint& VAO, GLuint& VBO, int& vertexCount) {
 }
 
 int main() {
-    // GLFW başlatma
+    // initialize glfw
     if (!glfwInit()) {
-        std::cerr << "GLFW başlatılamadı!" << std::endl;
+        std::cerr << "failed to initialize glfw!" << std::endl;
         return -1;
     }
 
@@ -137,7 +139,7 @@ int main() {
 
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "solar system simulation", NULL, NULL);
     if (!window) {
-        std::cerr << "Pencere oluşturulamadı!" << std::endl;
+        std::cerr << "failed to create window!" << std::endl;
         glfwTerminate();
         return -1;
     }
@@ -148,20 +150,23 @@ int main() {
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    
+    // enable vsync - sync with monitor refresh rate (60hz = 60fps, 144hz = 144fps)
+    glfwSwapInterval(1);
 
-    // GLEW başlatma
+    // initialize glew
     if (glewInit() != GLEW_OK) {
-        std::cerr << "GLEW başlatılamadı!" << std::endl;
+        std::cerr << "failed to initialize glew!" << std::endl;
         return -1;
     }
 
-    // ImGui başlatma
+    // initialize imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     
-    // Modern ImGui Stili
+    // modern imgui style
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 12.0f;
@@ -175,7 +180,7 @@ int main() {
     style.FramePadding = ImVec2(8, 6);
     style.ItemSpacing = ImVec2(12, 8);
     
-    // Modern renkler
+    // modern colors
     ImVec4* colors = style.Colors;
     colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.13f, 0.95f);
     colors[ImGuiCol_TitleBg] = ImVec4(0.12f, 0.12f, 0.17f, 1.00f);
@@ -198,13 +203,17 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
-    // Shader programlarını yükle
+    // load shader programs
     GLuint shaderProgram = createShaderProgram("shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
     GLuint blurShader = createShaderProgram("shaders/screen_vertex.glsl", "shaders/blur_shader.glsl");
     GLuint bloomShader = createShaderProgram("shaders/screen_vertex.glsl", "shaders/bloom_shader.glsl");
+    GLuint ringShader = createShaderProgram("shaders/ring_vertex.glsl", "shaders/ring_fragment.glsl");
 
-    // Küre geometrisi oluştur
+    // create sphere geometry
     Sphere sphere(1.0f, 30, 30);
+    
+    // create ring geometry for saturn
+    Ring ring(1.2f, 2.2f, 100);
 
     GLuint VAO, VBO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -228,11 +237,35 @@ int main() {
     // Texture coordinate attribute
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
+    
+    // Ring VAO setup
+    GLuint ringVAO, ringVBO, ringEBO;
+    glGenVertexArrays(1, &ringVAO);
+    glGenBuffers(1, &ringVBO);
+    glGenBuffers(1, &ringEBO);
+    
+    glBindVertexArray(ringVAO);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
+    glBufferData(GL_ARRAY_BUFFER, ring.vertices.size() * sizeof(float), ring.vertices.data(), GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ringEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ring.indices.size() * sizeof(unsigned int), ring.indices.data(), GL_STATIC_DRAW);
+    
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // Normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    // Texture coordinate attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
     // create starfield - points scattered in distant space
     std::vector<float> stars;
     srand(42); // same stars every time
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 230; i++) {
         // spread stars far from origin
         float x = (rand() % 40000 - 20000) / 10.0f;
         float y = (rand() % 40000 - 20000) / 10.0f;
@@ -262,7 +295,7 @@ int main() {
     
     glPointSize(1.5f);
 
-    // Bloom için framebuffer'lar
+    // framebuffers for bloom effect
     GLuint hdrFBO, colorBuffers[2];
     glGenFramebuffers(1, &hdrFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
@@ -288,7 +321,7 @@ int main() {
     glDrawBuffers(2, attachments);
     
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        std::cout << "Framebuffer hatası!" << std::endl;
+        std::cout << "Framebuffer error!" << std::endl;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     
     // Ping-pong framebuffers for blur
@@ -452,17 +485,18 @@ int main() {
         "moon",
         7.342e22f,
         1.7371e6f,
-        1.5f,                                // Ay'ın boyutu
-        glm::vec3(15.0f, 0.0f, 0.0f),       // Dünya'ya göre başlangıç pozisyonu
-        glm::vec3(0.0f, 0.0f, 5.0f),        // Daha hızlı yörünge hareketi
-        glm::vec3(0.7f, 0.7f, 0.7f),        // Gri renk
-        15.0f,                               // Dünya'ya olan uzaklık (orbitRadius)
+        1.5f,                                // moon size
+        glm::vec3(15.0f, 0.0f, 0.0f),       // initial position relative to earth
+        glm::vec3(0.0f, 0.0f, 5.0f),        // faster orbit movement
+        glm::vec3(0.7f, 0.7f, 0.7f),        // gray color
+        15.0f,                               // distance to earth (orbit radius)
         false
     ));
 
-    std::cout << "=== solar system simulation ===" << std::endl;
+    std::cout << "=== SOLAR SYSTEM SIMULATION ===" << std::endl;
+    std::cout << "Made by Batuhan Eroglu" << std::endl;
     std::cout << std::endl;
-    std::cout << "loaded celestial bodies:" << std::endl;
+    std::cout << "Loaded celestial bodies:" << std::endl;
     for (const auto& body : celestialBodies) {
         std::cout << "  - " << body->name << " (size: " << body->displayRadius << ")" << std::endl;
     }
@@ -505,6 +539,26 @@ int main() {
         std::cout << "moon texture loaded!" << std::endl;
     }
     
+    // Setup Saturn's rings (index 6 is Saturn)
+    std::cout << std::endl << "setting up saturn's rings..." << std::endl;
+    celestialBodies[6]->hasRing = true;
+    celestialBodies[6]->ringInnerRadius = celestialBodies[6]->displayRadius * 1.2f;
+    celestialBodies[6]->ringOuterRadius = celestialBodies[6]->displayRadius * 2.2f;
+    
+    // Try to load Saturn ring texture
+    GLuint saturnRingTexture = loadTexture("textures/saturn_rings.png");
+    if (saturnRingTexture == 0) {
+        // Try JPG format if PNG not found
+        saturnRingTexture = loadTexture("textures/saturn_rings.jpg");
+    }
+    
+    if (saturnRingTexture != 0) {
+        celestialBodies[6]->ringTextureID = saturnRingTexture;
+        std::cout << "saturn ring texture loaded!" << std::endl;
+    } else {
+        std::cout << "saturn ring texture not found, will use procedural rings" << std::endl;
+    }
+    
     // create orbital paths for visualization
     std::cout << std::endl << "creating orbit lines..." << std::endl;
     
@@ -535,15 +589,17 @@ int main() {
     std::cout << "  - moon orbit created (radius: " << moonOrbit.radius << ")" << std::endl;
     
     std::cout << std::endl;
-    std::cout << "Kontroller:" << std::endl;
-    std::cout << "  W/A/S/D - İleri/Sol/Geri/Sağ hareket" << std::endl;
-    std::cout << "  Space/Shift - Yukarı/Aşağı hareket" << std::endl;
-    std::cout << "  Mouse - Kamera yönü" << std::endl;
-    std::cout << "  +/- - Zaman hızını artır/azalt" << std::endl;
-    std::cout << "  ESC - Çıkış" << std::endl;
+    std::cout << "Controls:" << std::endl;
+    std::cout << "  W/A/S/D - Forward/Left/Backward/Right" << std::endl;
+    std::cout << "  Space/Shift - Move up/down" << std::endl;
+    std::cout << "  Mouse - Look around" << std::endl;
+    std::cout << "  TAB - Toggle menu" << std::endl;
+    std::cout << "  ESC - Quit" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Starting simulation..." << std::endl;
     std::cout << std::endl;
 
-    // Render döngüsü
+    // render loop
     while (!glfwWindowShouldClose(window)) {
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
@@ -558,10 +614,17 @@ int main() {
         if (followMode && selectedPlanetIndex >= 0 && selectedPlanetIndex < celestialBodies.size()) {
             glm::vec3 planetPos = celestialBodies[selectedPlanetIndex]->position;
             
-            // calculate desired camera position (behind and above planet)
+            // calculate camera position based on yaw and pitch (spherical coordinates)
             float distance = 80.0f;
-            float height = 30.0f;
-            glm::vec3 desiredPos = planetPos + glm::vec3(0.0f, height, distance);
+            float yaw = glm::radians(camera.Yaw);
+            float pitch = glm::radians(camera.Pitch);
+            
+            glm::vec3 offset;
+            offset.x = distance * cos(pitch) * cos(yaw);
+            offset.y = distance * sin(pitch);
+            offset.z = distance * cos(pitch) * sin(yaw);
+            
+            glm::vec3 desiredPos = planetPos - offset;
             
             // smoothly move camera to desired position
             float smoothSpeed = 5.0f * deltaTime;
@@ -609,7 +672,7 @@ int main() {
             }
         }
         
-        // ImGui frame başlat
+        // start imgui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -618,7 +681,7 @@ int main() {
         glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Render sahne başlangıcı
+        // start scene rendering
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // Siyah uzay
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -644,24 +707,26 @@ int main() {
         glDrawArrays(GL_POINTS, 0, 3000);
 
         // draw orbital paths in white
-        glm::mat4 orbitModel = glm::mat4(1.0f);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(orbitModel));
-        glUniform3f(glGetUniformLocation(shaderProgram, "objectColor"), 1.0f, 1.0f, 1.0f);
-        glUniform1i(glGetUniformLocation(shaderProgram, "isSun"), false);
-        glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), false);
-        
-        // draw planet orbits (indices 0-7)
-        for (int i = 0; i < 8; i++) {
-            glBindVertexArray(orbitLines[i].VAO);
-            glDrawArrays(GL_LINE_LOOP, 0, orbitLines[i].vertexCount);
+        if (showOrbits) {
+            glm::mat4 orbitModel = glm::mat4(1.0f);
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(orbitModel));
+            glUniform3f(glGetUniformLocation(shaderProgram, "objectColor"), 1.0f, 1.0f, 1.0f);
+            glUniform1i(glGetUniformLocation(shaderProgram, "isSun"), false);
+            glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), false);
+            
+            // draw planet orbits (indices 0-7)
+            for (int i = 0; i < 8; i++) {
+                glBindVertexArray(orbitLines[i].VAO);
+                glDrawArrays(GL_LINE_LOOP, 0, orbitLines[i].vertexCount);
+            }
+            
+            // draw moon's orbit at earth position (index 8)
+            glm::mat4 moonOrbitModel = glm::mat4(1.0f);
+            moonOrbitModel = glm::translate(moonOrbitModel, celestialBodies[3]->position);
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(moonOrbitModel));
+            glBindVertexArray(orbitLines[8].VAO);
+            glDrawArrays(GL_LINE_LOOP, 0, orbitLines[8].vertexCount);
         }
-        
-        // draw moon's orbit at earth position (index 8)
-        glm::mat4 moonOrbitModel = glm::mat4(1.0f);
-        moonOrbitModel = glm::translate(moonOrbitModel, celestialBodies[3]->position);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(moonOrbitModel));
-        glBindVertexArray(orbitLines[8].VAO);
-        glDrawArrays(GL_LINE_LOOP, 0, orbitLines[8].vertexCount);
         
         // render all celestial bodies
         glBindVertexArray(VAO);
@@ -702,6 +767,46 @@ int main() {
             glDrawElements(GL_TRIANGLES, sphere.indices.size(), GL_UNSIGNED_INT, 0);
         }
         
+        // Render planetary rings (Saturn)
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+        glUseProgram(ringShader);
+        glUniformMatrix4fv(glGetUniformLocation(ringShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(ringShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniform3fv(glGetUniformLocation(ringShader, "viewPos"), 1, glm::value_ptr(camera.Position));
+        glUniform3fv(glGetUniformLocation(ringShader, "lightPos"), 1, glm::value_ptr(celestialBodies[0]->position));
+        
+        glBindVertexArray(ringVAO);
+        for (size_t idx = 0; idx < celestialBodies.size(); idx++) {
+            auto& body = celestialBodies[idx];
+            if (body->hasRing) {
+                glm::mat4 ringModel = glm::mat4(1.0f);
+                ringModel = glm::translate(ringModel, body->position);
+                ringModel = glm::rotate(ringModel, body->rotationAngle * 0.1f, glm::vec3(0.0f, 1.0f, 0.0f));
+                // Tilt the rings slightly (Saturn's rings are tilted about 26.7 degrees)
+                ringModel = glm::rotate(ringModel, glm::radians(26.7f), glm::vec3(1.0f, 0.0f, 0.0f));
+                ringModel = glm::scale(ringModel, glm::vec3(body->displayRadius));
+                
+                glUniformMatrix4fv(glGetUniformLocation(ringShader, "model"), 1, GL_FALSE, glm::value_ptr(ringModel));
+                
+                if (body->ringTextureID != 0) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, body->ringTextureID);
+                    glUniform1i(glGetUniformLocation(ringShader, "ringTexture"), 0);
+                    glUniform1i(glGetUniformLocation(ringShader, "useTexture"), true);
+                } else {
+                    // Use procedural color for rings
+                    glUniform1i(glGetUniformLocation(ringShader, "useTexture"), false);
+                    glUniform3f(glGetUniformLocation(ringShader, "ringColor"), 0.9f, 0.85f, 0.7f);
+                }
+                
+                glDrawElements(GL_TRIANGLES, ring.indices.size(), GL_UNSIGNED_INT, 0);
+            }
+        }
+        
+        glDisable(GL_BLEND);
+        
         // apply gaussian blur passes
         bool horizontal = true, first_iteration = true;
         int amount = 4;  // reduced from 10 for performance
@@ -727,7 +832,7 @@ int main() {
         glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
         glUniform1i(glGetUniformLocation(bloomShader, "scene"), 0);
         glUniform1i(glGetUniformLocation(bloomShader, "bloomBlur"), 1);
-        glUniform1f(glGetUniformLocation(bloomShader, "bloom"), 0.3f);  // 1.0'dan 0.3'e - çok daha az bloom
+        glUniform1f(glGetUniformLocation(bloomShader, "bloom"), 0.3f);  // reduced from 1.0 to 0.3 for less bloom
         glUniform1f(glGetUniformLocation(bloomShader, "exposure"), 1.0f);
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -735,35 +840,49 @@ int main() {
         // show ui menu after bloom rendering
         if (showMenu) {
             ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(380, 300), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(380, 380), ImGuiCond_FirstUseEver);
             ImGui::Begin("solar system simulation", &showMenu, ImGuiWindowFlags_NoCollapse);
             
             // time control section
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.3f, 1.0f));
             ImGui::Text("TIME CONTROL");
-            ImGui::PopStyleColor();
             ImGui::Spacing();
             
             ImGui::PushItemWidth(-1);
-            ImGui::SliderFloat("##timescale", &timeScale, 0.0f, 5.0f, "speed: %.2fx");
+            ImGui::SliderFloat("##timescale", &timeScale, 0.0f, 5.0f, "time speed: %.2fx");
             ImGui::PopItemWidth();
             
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
             
+            // camera control section
+            ImGui::Text("CAMERA CONTROL");
+            ImGui::Spacing();
+            
+            ImGui::PushItemWidth(-1);
+            ImGui::SliderFloat("##cameraspeed", &camera.MovementSpeed, 10.0f, 200.0f, "camera speed: %.0f");
+            ImGui::PopItemWidth();
+            
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            
+            // visual settings section
+            ImGui::Text("VISUAL SETTINGS");
+            ImGui::Spacing();
+            
+            ImGui::Checkbox("show orbit lines", &showOrbits);
+            
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            
             // planet tracking section
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.85f, 1.0f, 1.0f));
             ImGui::Text("PLANET TRACKING");
-            ImGui::PopStyleColor();
             ImGui::Spacing();
             
             if (selectedPlanetIndex >= 0 && selectedPlanetIndex < celestialBodies.size()) {
-                ImGui::Text("selected planet:");
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.5f, 1.0f));
-                ImGui::Text("%s", celestialBodies[selectedPlanetIndex]->name.c_str());
-                ImGui::PopStyleColor();
+                ImGui::Text("selected planet: %s", celestialBodies[selectedPlanetIndex]->name.c_str());
                 
                 ImGui::Spacing();
                 ImGui::Checkbox("follow mode", &followMode);
@@ -774,7 +893,7 @@ int main() {
                     followMode = false;
                 }
             } else {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
                 ImGui::TextWrapped("click on a planet to select it");
                 ImGui::PopStyleColor();
             }
@@ -784,12 +903,10 @@ int main() {
             ImGui::Spacing();
             
             // info section
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.5f, 1.0f));
             ImGui::Text("fps: %.0f", ImGui::GetIO().Framerate);
-            ImGui::PopStyleColor();
             
             ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
             ImGui::Text("controls:");
             ImGui::BulletText("wasd - move camera");
             ImGui::BulletText("space - move up");
@@ -841,6 +958,22 @@ int main() {
             ImGui::End();
         }
         
+        // Credit text - always visible, no background box
+        ImGui::SetNextWindowPos(ImVec2(20, SCR_HEIGHT - 50), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.0f); // completely transparent background
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f); // no border
+        ImGui::Begin("CreditText", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+        
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+        ImGui::SetWindowFontScale(1.5f); // scale text 1.5x larger
+        ImGui::Text("Made by Batuhan Eroglu");
+        ImGui::PopStyleColor();
+        ImGui::End();
+        ImGui::PopStyleVar();
+        
         // ImGui render
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -885,7 +1018,7 @@ void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (!showMenu) {  // Menü açıkken kamera hareketi yok
+    if (!showMenu) {  // no camera movement when menu is open
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             camera.ProcessKeyboard(FORWARD, deltaTime);
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -1003,10 +1136,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     lastX = xpos;
     lastY = ypos;
 
-    // only process camera movement if not in follow mode
-    if (!followMode) {
-        camera.ProcessMouseMovement(xoffset, yoffset);
-    }
+    // allow mouse camera control in all modes
+    camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {

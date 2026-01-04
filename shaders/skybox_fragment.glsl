@@ -9,7 +9,7 @@ const float PI = 3.14159265359;
 
 void main()
 {    
-    // Cubemap coordinates'i spherical mapping'e çevir
+    // convert cubemap coordinates to spherical mapping
     vec3 dir = normalize(TexCoords);
     
     // Spherical coordinates
