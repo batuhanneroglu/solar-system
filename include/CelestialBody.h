@@ -28,6 +28,10 @@ public:
     unsigned int textureID;
     bool hasTexture;
     
+    // Info panel texture (for sidebar display)
+    unsigned int infoTextureID;
+    bool hasInfoTexture;
+    
     // Ring properties
     bool hasRing;
     float ringInnerRadius;
@@ -41,8 +45,8 @@ public:
           position(position), velocity(velocity), color(color), 
           rotationSpeed(rotationSpeed), rotationAngle(0.0f), isSun(isSun),
           orbitRadius(glm::length(position)), orbitSpeed(velocity.z), orbitAngle(0.0f),
-          textureID(0), hasTexture(false), hasRing(false), ringInnerRadius(0.0f), 
-          ringOuterRadius(0.0f), ringTextureID(0) {}
+          textureID(0), hasTexture(false), infoTextureID(0), hasInfoTexture(false),
+          hasRing(false), ringInnerRadius(0.0f), ringOuterRadius(0.0f), ringTextureID(0) {}
 
     void update(float deltaTime, const std::vector<CelestialBody*>& bodies) {
         if (isSun) {

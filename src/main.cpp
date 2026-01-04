@@ -559,6 +559,33 @@ int main() {
         std::cout << "saturn ring texture not found, will use procedural rings" << std::endl;
     }
     
+    // Load info panel textures for sidebar display
+    std::cout << std::endl << "loading info panel textures..." << std::endl;
+    
+    // Array of planet names for info texture loading
+    const char* planetNames[] = {
+        "sun", "mercury", "venus", "earth", "mars", 
+        "jupiter", "saturn", "uranus", "neptune", "moon"
+    };
+    
+    for (int i = 0; i < 10; i++) {
+        // Try PNG format first
+        std::string infoPath = std::string("textures/info/") + planetNames[i] + "_info.png";
+        GLuint infoTexture = loadTexture(infoPath.c_str());
+        
+        // Try JPG format if PNG not found
+        if (infoTexture == 0) {
+            infoPath = std::string("textures/info/") + planetNames[i] + "_info.jpg";
+            infoTexture = loadTexture(infoPath.c_str());
+        }
+        
+        if (infoTexture != 0) {
+            celestialBodies[i]->infoTextureID = infoTexture;
+            celestialBodies[i]->hasInfoTexture = true;
+            std::cout << "  - " << planetNames[i] << " info texture loaded" << std::endl;
+        }
+    }
+    
     // create orbital paths for visualization
     std::cout << std::endl << "creating orbit lines..." << std::endl;
     
@@ -920,6 +947,170 @@ int main() {
             ImGui::PopStyleColor();
             
             ImGui::End();
+        }
+        
+        // planet info sidebar - shown in follow mode
+        if (followMode && selectedPlanetIndex >= 0 && selectedPlanetIndex < celestialBodies.size()) {
+            auto& selectedPlanet = celestialBodies[selectedPlanetIndex];
+            
+            // sidebar positioning on the right side
+            float sidebarWidth = 380.0f;
+            float sidebarHeight = 650.0f;
+            ImGui::SetNextWindowPos(ImVec2(SCR_WIDTH - sidebarWidth - 20, (SCR_HEIGHT - sidebarHeight) / 2), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(sidebarWidth, sidebarHeight), ImGuiCond_Always);
+            
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 15.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+            ImGui::SetNextWindowBgAlpha(0.95f);
+            
+            ImGui::Begin("Planet Information", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+            
+            // planet name as header with modern styling
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::SetWindowFontScale(2.0f);
+            
+            // capitalize first letter
+            std::string planetName = selectedPlanet->name;
+            if (!planetName.empty()) {
+            planetName[0] = toupper(planetName[0]);
+            }
+            
+            float textWidth = ImGui::CalcTextSize(planetName.c_str()).x;
+            ImGui::SetCursorPosX((sidebarWidth - textWidth) * 0.5f);
+            ImGui::Text("%s", planetName.c_str());
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::PopStyleColor();
+            
+            ImGui::Spacing();
+            
+            // thin separator line
+            ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::Separator();
+            ImGui::PopStyleColor();
+            
+            ImGui::Spacing();
+            
+            // planet texture preview with border
+            // Use info texture if available, otherwise fallback to regular texture
+            bool hasDisplayTexture = selectedPlanet->hasInfoTexture || selectedPlanet->hasTexture;
+            if (hasDisplayTexture) {
+                float imageSize = 180.0f;
+                ImGui::SetCursorPosX((sidebarWidth - imageSize) * 0.5f);
+                
+                GLuint displayTexture = selectedPlanet->hasInfoTexture ? 
+                    selectedPlanet->infoTextureID : selectedPlanet->textureID;
+                    
+                ImGui::Image((void*)(intptr_t)displayTexture, 
+                       ImVec2(imageSize, imageSize));
+            }
+            
+            ImGui::Spacing();
+            
+            // planet description
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
+            ImGui::SetWindowFontScale(0.95f);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + sidebarWidth - 40);
+            
+            std::string description = "";
+            if (selectedPlanet->name == "sun") {
+            description = "The Sun is the star at the center of our Solar System. It provides light and heat to all planets.";
+            } else if (selectedPlanet->name == "mercury") {
+            description = "Mercury is the smallest and closest planet to the Sun. It has extreme temperature variations.";
+            } else if (selectedPlanet->name == "venus") {
+            description = "Venus is the hottest planet with a thick toxic atmosphere. It rotates in the opposite direction.";
+            } else if (selectedPlanet->name == "earth") {
+            description = "Earth is our home planet and the only known world with life. It has water, atmosphere, and perfect conditions for humans.";
+            } else if (selectedPlanet->name == "mars") {
+            description = "Mars is the red planet with the largest volcano in the Solar System. It's a target for future human exploration.";
+            } else if (selectedPlanet->name == "jupiter") {
+            description = "Jupiter is the largest planet with a massive storm called the Great Red Spot. It has 79 known moons.";
+            } else if (selectedPlanet->name == "saturn") {
+            description = "Saturn is famous for its beautiful ring system. It's the least dense planet and could float in water.";
+            } else if (selectedPlanet->name == "uranus") {
+            description = "Uranus is an ice giant that rotates on its side. It has a pale blue-green color due to methane.";
+            } else if (selectedPlanet->name == "neptune") {
+            description = "Neptune is the windiest planet with supersonic winds. It has a deep blue color and is very cold.";
+            } else if (selectedPlanet->name == "moon") {
+            description = "The Moon is Earth's only natural satellite. It affects our tides and has been visited by humans.";
+            }
+            
+            ImGui::Text("%s", description.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::PopStyleColor();
+            
+            ImGui::Spacing();
+            ImGui::Spacing();
+            
+            // properties section with modern monochrome styling
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("PROPERTIES");
+            ImGui::PopStyleColor();
+            
+            ImGui::Spacing();
+            
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+            
+            // display radius
+            ImGui::Text("Display Radius:");
+            ImGui::SameLine(160);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%.1f units", selectedPlanet->displayRadius);
+            ImGui::PopStyleColor();
+            
+            // mass
+            ImGui::Text("Mass:");
+            ImGui::SameLine(160);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%.2e kg", selectedPlanet->mass);
+            ImGui::PopStyleColor();
+            
+            // orbit distance
+            if (!selectedPlanet->isSun) {
+            ImGui::Text("Orbit Distance:");
+            ImGui::SameLine(160);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%.1f units", selectedPlanet->orbitRadius);
+            ImGui::PopStyleColor();
+            
+            // orbit speed
+            ImGui::Text("Orbit Speed:");
+            ImGui::SameLine(160);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%.2f u/s", selectedPlanet->orbitSpeed);
+            ImGui::PopStyleColor();
+            }
+            
+            // rotation speed
+            ImGui::Text("Rotation Speed:");
+            ImGui::SameLine(160);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%.2f rad/s", selectedPlanet->rotationSpeed);
+            ImGui::PopStyleColor();
+            
+            ImGui::PopStyleColor();
+            
+            ImGui::Spacing();
+            
+            // special features badges
+            if (selectedPlanet->hasRing) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+            ImGui::Button("  HAS RING SYSTEM  ");
+            ImGui::PopStyleColor(2);
+            }
+            
+            if (selectedPlanet->isSun) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+            ImGui::Button("  SELF LUMINOUS STAR  ");
+            ImGui::PopStyleColor(2);
+            }
+            
+            ImGui::End();
+            ImGui::PopStyleVar(2);
         }
         
         // draw crosshair when not in menu
