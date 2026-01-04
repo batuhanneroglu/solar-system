@@ -1,0 +1,32 @@
+# Visual Studio build dosyaları
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE dosyaları
+.vs/
+.vscode/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.user
+
+# Object dosyaları
+*.o
+*.obj
+
+# Kütüphane dosyaları
+*.a
+*.lib
+
+# Log dosyaları
+*.log
