@@ -1,5 +1,7 @@
 # Solar System Simulation
 
+![Solar System][images/screenshot.png]
+
 A real-time 3D solar system simulation built with C++ and OpenGL. Features realistic planetary orbits, textures, interactive camera, and planet tracking system.
 
 ## Features
